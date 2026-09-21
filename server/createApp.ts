@@ -81,6 +81,29 @@ export function createApiApp() {
     res.json(clinicDb.doctors[index]);
   });
 
+  app.post("/api/doctors/:id/portfolio", (req, res) => {
+    const { id } = req.params;
+    const doc = clinicDb.doctors.find(d => d.id === id);
+    if (!doc) return res.status(404).json({ error: "Врач не найден" });
+    const { title, category, description, beforeImage, afterImage, durationText, tags } = req.body;
+    if (!title || !beforeImage || !afterImage) {
+      return res.status(400).json({ error: "Заполните название и фотографии До/После" });
+    }
+    const newCase = {
+      id: `case-${id}-${Date.now()}`,
+      title: title.trim(),
+      category: category || "Клинический случай",
+      description: description || "",
+      beforeImage,
+      afterImage,
+      durationText: durationText || "1 визит",
+      tags: Array.isArray(tags) && tags.length > 0 ? tags : ["Клинический случай"]
+    };
+    if (!doc.portfolio) doc.portfolio = [];
+    doc.portfolio.unshift(newCase);
+    res.status(201).json(newCase);
+  });
+
   // 4. Appointments
   app.get("/api/appointments", (req, res) => {
     res.json(clinicDb.appointments);

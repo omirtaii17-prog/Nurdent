@@ -1,28 +1,36 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, RefreshCw, Clock, Calendar, Check, AlertCircle, HeartPulse, User, Phone, Stethoscope, ChevronRight, Mic, MicOff, Volume2 } from 'lucide-react';
-import { ChatMessage, AppointmentDraft, SlotInfo, ClinicInfo } from '../types.js';
+import { Send, Sparkles, RefreshCw, Clock, Calendar, Check, AlertCircle, HeartPulse, User, Phone, Stethoscope, ChevronRight, Mic, PhoneCall, MapPin, Award, Star, Image as ImageIcon } from 'lucide-react';
+import { ChatMessage, AppointmentDraft, SlotInfo, ClinicInfo, Doctor, ChatAction } from '../types.js';
 import { ConfirmationCard } from './ConfirmationCard.js';
 
 interface ChatViewProps {
   clinicInfo: ClinicInfo;
   onAppointmentCreated?: () => void;
+  onOpenGis?: () => void;
+  onOpenBooking?: (serviceId?: string, doctorId?: string) => void;
+  onOpenDoctorProfile?: (doctor: Doctor) => void;
+  onOpenVoice?: () => void;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({
   clinicInfo,
-  onAppointmentCreated
+  onAppointmentCreated,
+  onOpenGis,
+  onOpenBooking,
+  onOpenDoctorProfile,
+  onOpenVoice
 }) => {
   const initialWelcomeMessage: ChatMessage = {
     id: 'msg-welcome',
     sender: 'assistant',
-    text: 'Здравствуйте! Рада приветствовать вас в клинике DentaCare. Меня зовут Аида, я AI-администратор клиники.\n\nПодскажите, пожалуйста, что вас беспокоит или на какую процедуру вы хотите записаться? Я помогу подобрать врача и удобное время.',
+    text: 'Здравствуйте! Рада приветствовать вас в клинике DentaCare. Меня зовут Аида, я цифровой администратор клиники.\n\nОпишите, пожалуйста, вашу проблему или желаемую процедуру. Я порекомендую подходящего профильного врача, покажу свободные слоты и помогу записаться на приём.',
     timestamp: '08:30',
     quickReplies: [
-      'Можно записаться на чистку завтра?',
-      'Сколько стоит лечение кариеса?',
-      'Где вы находитесь и есть ли парковка?',
-      'Можно ли записать ребёнка?',
-      'Есть ли рассрочка Kaspi?'
+      'У меня сильно болит зуб ночью',
+      'Хочу записаться на чистку зубов',
+      'Сколько стоят брекеты и кто ортодонт?',
+      '📍 Как вас найти в 2GIS и где парковка?',
+      'Можно ли оформить рассрочку Kaspi 0-0-12?'
     ]
   };
 
@@ -30,7 +38,6 @@ export const ChatView: React.FC<ChatViewProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeDraft, setActiveDraft] = useState<AppointmentDraft | null>(null);
-  const [speechActive, setSpeechActive] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -81,7 +88,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
         appointmentDraft: data.appointmentDraft,
         suggestedSlots: data.suggestedSlots,
         quickReplies: data.quickReplies,
-        isEmergencyAlert: data.isEmergencyAlert
+        isEmergencyAlert: data.isEmergencyAlert,
+        recommendedDoctors: data.recommendedDoctors,
+        actions: data.actions
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -95,7 +104,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
         {
           id: `msg-err-${Date.now()}`,
           sender: 'assistant',
-          text: 'Извините, произошла небольшая заминка соединения. Пожалуйста, повторите запрос или позвоните нам по номеру ' + clinicInfo.phone,
+          text: 'Извините, произошла небольшая заминка соединения. Пожалуйста, повторите запрос или свяжитесь с нами по номеру ' + clinicInfo.phone,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);
@@ -105,7 +114,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
   };
 
   const handleSlotSelect = (slot: SlotInfo) => {
-    handleSendMessage(`Мне удобно в ${slot.time}`);
+    handleSendMessage(`Мне удобно в ${slot.time} к врачу ${slot.doctorName}`);
   };
 
   const handleConfirmAppointment = async (draft: AppointmentDraft): Promise<boolean> => {
@@ -130,14 +139,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
       const created = await res.json();
 
-      // Add a celebration message from the assistant
       setMessages(prev => [
         ...prev,
         {
           id: `msg-confirmed-${Date.now()}`,
           sender: 'assistant',
-          text: `Отлично, ${draft.patientName}! Запись #${created.id} окончательно зарегистрирована в нашей базе.\n\nМы отправили вам подтверждение. Также за 24 часа и за 2 часа до приёма вам придёт автоматическое напоминание в WhatsApp / SMS. Ждём вас в клинике DentaCare по адресу: ${clinicInfo.address}!`,
+          text: `Отлично, ${draft.patientName}! Ваша запись #${created.id} успешно подтверждена и занесена в расписание клиники.\n\nЗа 24 часа и за 2 часа до приёма вам придёт автоматическое напоминание в WhatsApp / SMS. Ждём вас по адресу: ${clinicInfo.address}!`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          actions: [
+            {
+              id: 'act-2gis',
+              label: '📍 Как нас найти (2GIS)',
+              type: 'open_2gis'
+            },
+            {
+              id: 'act-prep',
+              label: 'Памятка пациенту',
+              type: 'navigate_faq'
+            }
+          ],
           quickReplies: [
             'Как подготовиться к приёму?',
             'Где припарковать машину?',
@@ -161,6 +181,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
     handleSendMessage(`Я хочу изменить время или дату записи на ${draft.serviceName.toLowerCase()}`);
   };
 
+  const handleActionClick = (action: ChatAction) => {
+    if (action.type === 'open_2gis') {
+      if (onOpenGis) onOpenGis();
+      else window.open(clinicInfo.gisUrl || 'https://2gis.kz/almaty', '_blank');
+    } else if (action.type === 'open_booking') {
+      if (onOpenBooking) {
+        onOpenBooking(action.serviceId || action.payload?.serviceId, action.doctorId || action.payload?.doctorId);
+      }
+    } else if (action.type === 'voice_call') {
+      if (onOpenVoice) onOpenVoice();
+    } else if (action.type === 'call_admin') {
+      window.location.href = `tel:${clinicInfo.phone.replace(/[^0-9+]/g, '')}`;
+    } else if (action.type === 'navigate_doctors' || action.type === 'navigate_portfolio') {
+      if (action.payload?.doctor && onOpenDoctorProfile) {
+        onOpenDoctorProfile(action.payload.doctor);
+      }
+    }
+  };
+
   const handleResetChat = () => {
     if (confirm('Очистить диалог и начать сначала?')) {
       setMessages([initialWelcomeMessage]);
@@ -168,27 +207,25 @@ export const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
-  const simulatePatientVoice = () => {
-    const demoPhrases = [
-      'Можно записаться на чистку завтра?',
-      'Здравствуйте, сколько стоит лечение кариеса и есть ли свободные места на этой неделе?',
-      'У меня очень сильно разболелся зуб, можно прийти сегодня?',
-      'Подскажите, со скольки лет вы принимаете детей и есть ли рассрочка Kaspi?'
-    ];
-    const phrase = demoPhrases[Math.floor(Math.random() * demoPhrases.length)];
-    setInputValue(phrase);
-  };
+  // Preset symptom buttons for instant triage
+  const symptomPresets = [
+    { label: 'Ночная боль в зубе', icon: '⚡', query: 'У меня болит зуб ночью, пульсирует, к какому врачу пойти?' },
+    { label: 'Брекеты / Прикус', icon: '🦷', query: 'Хочу выровнять зубы и проконсультироваться по брекетам' },
+    { label: 'Чистка AirFlow', icon: '✨', query: 'Хочу записаться на гигиеническую чистку зубов' },
+    { label: 'Имплантация зуба', icon: '🔩', query: 'Сколько стоит имплантация зуба под ключ?' },
+    { label: 'Детский врач', icon: '👶', query: 'Принимаете ли вы детей и как подготовить ребёнка?' }
+  ];
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-130px)] min-h-[580px] bg-slate-50 border-x border-slate-200">
+    <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-130px)] min-h-[620px] bg-slate-50 border-x border-slate-200">
       {/* Top reception assistant bar */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <div className="w-10 h-10 rounded-full bg-teal-600 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-700 text-white flex items-center justify-center font-bold text-sm shadow-xs">
               АИ
             </div>
-            <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-white rounded-full" />
           </div>
           <div>
             <div className="flex items-center gap-2">
@@ -198,24 +235,37 @@ export const ChatView: React.FC<ChatViewProps> = ({
               </span>
             </div>
             <p className="text-xs text-slate-500">
-              Проверяет реальные слоты врачей • Никаких выдуманных данных
+              Сверяет реальное расписание • Подбирает врача • Записывает без звонков
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={simulatePatientVoice}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs hover:bg-slate-100 transition-colors cursor-pointer"
-            title="Вставить реалистичную фразу пациента"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-teal-600" />
-            <span>Пример фразы</span>
-          </button>
+          {onOpenVoice && (
+            <button
+              onClick={onOpenVoice}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 text-xs font-semibold border border-teal-200 transition-colors cursor-pointer"
+              title="Переключиться на голосовой звонок с AI"
+            >
+              <PhoneCall className="w-3.5 h-3.5 text-teal-600" />
+              <span className="hidden sm:inline">AI-Звонок</span>
+            </button>
+          )}
+
+          {onOpenGis && (
+            <button
+              onClick={onOpenGis}
+              className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              title="Открыть схему проезда в 2GIS"
+            >
+              <MapPin className="w-3.5 h-3.5 text-emerald-600" />
+              <span>2GIS</span>
+            </button>
+          )}
 
           <button
             onClick={handleResetChat}
-            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
             title="Очистить диалог"
           >
             <RefreshCw className="w-4 h-4" />
@@ -233,7 +283,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
               className={`flex flex-col ${isUser ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={`max-w-[88%] sm:max-w-[78%] rounded-2xl p-3.5 sm:p-4 text-sm leading-relaxed shadow-2xs ${
+                className={`max-w-[92%] sm:max-w-[82%] rounded-2xl p-4 text-sm leading-relaxed shadow-2xs ${
                   isUser
                     ? 'bg-teal-600 text-white rounded-br-xs'
                     : msg.isEmergencyAlert
@@ -243,27 +293,89 @@ export const ChatView: React.FC<ChatViewProps> = ({
               >
                 {/* Emergency banner inside message if acute pain */}
                 {msg.isEmergencyAlert && (
-                  <div className="flex items-center gap-2 mb-2 p-2 bg-rose-100 text-rose-800 rounded-lg text-xs font-semibold">
+                  <div className="flex items-center gap-2 mb-2.5 p-2.5 bg-rose-100/80 text-rose-900 rounded-xl text-xs font-semibold">
                     <HeartPulse className="w-4 h-4 text-rose-600 shrink-0" />
-                    <span>Внимание: Экстренный коридор при острой боли</span>
+                    <span>Внимание: Экстренный коридор при острой боли. Не прогревайте щёку компрессами!</span>
                   </div>
                 )}
 
-                <div className="whitespace-pre-line">{msg.text}</div>
+                <div className="whitespace-pre-line leading-relaxed">{msg.text}</div>
+
+                {/* Recommended Doctors Cards (AI Triage outcome) */}
+                {msg.recommendedDoctors && msg.recommendedDoctors.length > 0 && (
+                  <div className="mt-3.5 pt-3 border-t border-slate-100 space-y-2.5">
+                    <div className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Stethoscope className="w-4 h-4 text-teal-600" />
+                      <span>Рекомендованный профильный специалист:</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {msg.recommendedDoctors.map(doctor => (
+                        <div
+                          key={doctor.id}
+                          className="p-3 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={doctor.avatar}
+                              alt={doctor.name}
+                              referrerPolicy="no-referrer"
+                              className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
+                            />
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold text-slate-900">{doctor.name}</span>
+                                <span className="text-[10px] font-semibold text-amber-600 flex items-center">
+                                  ★ {doctor.rating}
+                                </span>
+                              </div>
+                              <div className="text-xs text-teal-700 font-medium">{doctor.specialty}</div>
+                              {doctor.experienceYears && (
+                                <div className="text-[11px] text-slate-500">Стаж {doctor.experienceYears} лет</div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {onOpenDoctorProfile && (
+                              <button
+                                onClick={() => onOpenDoctorProfile(doctor)}
+                                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                              >
+                                До/После
+                              </button>
+                            )}
+
+                            {onOpenBooking && (
+                              <button
+                                onClick={() => onOpenBooking(undefined, doctor.id)}
+                                className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1"
+                              >
+                                <span>Записаться</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Suggested slot chips when AI offers free times */}
                 {msg.suggestedSlots && msg.suggestedSlots.length > 0 && !msg.appointmentDraft && (
-                  <div className="mt-3 pt-2 border-t border-slate-100">
-                    <div className="text-xs font-semibold text-slate-500 mb-2 flex items-center gap-1">
+                  <div className="mt-3.5 pt-2.5 border-t border-slate-100">
+                    <div className="text-xs font-semibold text-slate-600 mb-2 flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5 text-teal-600" />
                       <span>Свободные окна (нажмите для выбора):</span>
                     </div>
+
                     <div className="flex flex-wrap gap-1.5">
                       {msg.suggestedSlots.map((slot, sIdx) => (
                         <button
                           key={sIdx}
                           onClick={() => handleSlotSelect(slot)}
-                          className="px-3 py-1.5 bg-teal-50 hover:bg-teal-600 hover:text-white text-teal-800 border border-teal-200 hover:border-teal-600 rounded-lg text-xs font-medium transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                          className="px-3 py-1.5 bg-teal-50 hover:bg-teal-600 hover:text-white text-teal-800 border border-teal-200 hover:border-teal-600 rounded-xl text-xs font-medium transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
                         >
                           <Clock className="w-3 h-3" />
                           <span>{slot.time}</span>
@@ -274,7 +386,7 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   </div>
                 )}
 
-                {/* Section 5 Confirmation Card Requirement */}
+                {/* Confirmation Card Requirement */}
                 {msg.appointmentDraft && (
                   <ConfirmationCard
                     draft={msg.appointmentDraft}
@@ -283,8 +395,28 @@ export const ChatView: React.FC<ChatViewProps> = ({
                   />
                 )}
 
+                {/* Action buttons (e.g. 2GIS, voice call, booking) */}
+                {msg.actions && msg.actions.length > 0 && (
+                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-2">
+                    {msg.actions.map((action, aIdx) => (
+                      <button
+                        key={action.id || aIdx}
+                        onClick={() => handleActionClick(action)}
+                        className="px-3.5 py-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-900 border border-teal-200 text-xs font-semibold transition-all shadow-2xs cursor-pointer flex items-center gap-1.5"
+                      >
+                        {action.type === 'open_2gis' && <MapPin className="w-3.5 h-3.5 text-emerald-600" />}
+                        {action.type === 'open_booking' && <Calendar className="w-3.5 h-3.5 text-teal-600" />}
+                        {action.type === 'voice_call' && <PhoneCall className="w-3.5 h-3.5 text-teal-600" />}
+                        {action.type === 'call_admin' && <Phone className="w-3.5 h-3.5 text-teal-600" />}
+                        {action.type === 'navigate_portfolio' && <ImageIcon className="w-3.5 h-3.5 text-teal-600" />}
+                        <span>{action.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <div
-                  className={`mt-1.5 text-[10px] text-right ${
+                  className={`mt-2 text-[10px] text-right ${
                     isUser ? 'text-teal-200' : 'text-slate-400'
                   }`}
                 >
@@ -294,13 +426,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
 
               {/* Quick reply chips underneath the latest message */}
               {index === messages.length - 1 && msg.quickReplies && (
-                <div className="mt-2.5 flex flex-wrap gap-1.5 max-w-[90%]">
+                <div className="mt-2.5 flex flex-wrap gap-1.5 max-w-[92%]">
                   {msg.quickReplies.map((reply, rIdx) => (
                     <button
                       key={rIdx}
                       onClick={() => handleSendMessage(reply)}
                       disabled={isLoading}
-                      className="text-xs bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 hover:border-teal-300 px-3 py-1.5 rounded-full transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
+                      className="text-xs bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-900 border border-slate-200 hover:border-teal-300 px-3 py-1.5 rounded-full transition-colors shadow-2xs cursor-pointer flex items-center gap-1"
                     >
                       <span>{reply}</span>
                       <ChevronRight className="w-3 h-3 text-slate-400" />
@@ -322,12 +454,30 @@ export const ChatView: React.FC<ChatViewProps> = ({
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-bounce" />
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-bounce [animation-delay:0.2s]" />
               <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-bounce [animation-delay:0.4s]" />
-              <span className="text-slate-500 text-xs ml-1">Аида проверяет базу данных...</span>
+              <span className="text-slate-500 text-xs ml-1">Аида подбирает врача и проверяет слоты...</span>
             </div>
           </div>
         )}
 
         <div ref={messagesEndRef} />
+      </div>
+
+      {/* Symptom triage quick prompt pills */}
+      <div className="bg-slate-100/80 border-t border-slate-200 px-3 py-2 overflow-x-auto flex items-center gap-1.5 scrollbar-none">
+        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider shrink-0 ml-1">
+          Частые темы:
+        </span>
+        {symptomPresets.map((preset, pIdx) => (
+          <button
+            key={pIdx}
+            onClick={() => handleSendMessage(preset.query)}
+            disabled={isLoading}
+            className="text-[11px] bg-white hover:bg-teal-50 text-slate-700 hover:text-teal-800 border border-slate-200 px-2.5 py-1 rounded-lg transition-colors shadow-2xs cursor-pointer whitespace-nowrap flex items-center gap-1"
+          >
+            <span>{preset.icon}</span>
+            <span>{preset.label}</span>
+          </button>
+        ))}
       </div>
 
       {/* Input bar */}
@@ -344,9 +494,9 @@ export const ChatView: React.FC<ChatViewProps> = ({
             type="text"
             value={inputValue}
             onChange={e => setInputValue(e.target.value)}
-            placeholder="Напишите сообщение администратору (например: «Хочу записаться на чистку завтра»)..."
+            placeholder="Опишите, что вас беспокоит (например: «У меня ноет зуб», «Хочу чистку завтра»)..."
             disabled={isLoading}
-            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
+            className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:bg-white transition-all"
           />
 
           <button
@@ -361,8 +511,13 @@ export const ChatView: React.FC<ChatViewProps> = ({
         </form>
 
         <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400 px-1">
-          <span>AI-администратор сверяется с реальным расписанием врачей клиники DentaCare</span>
-          <span className="hidden sm:inline">Алматы • Пн-Вс</span>
+          <span>Сверка с базой врачей в реальном времени • Kaspi Red 0-0-12</span>
+          <button
+            onClick={onOpenGis}
+            className="text-emerald-700 hover:underline font-medium cursor-pointer"
+          >
+            Алматы, пр. Достык 128 (2GIS)
+          </button>
         </div>
       </div>
     </div>

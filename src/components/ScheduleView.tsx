@@ -8,6 +8,7 @@ interface ScheduleViewProps {
   services: Service[];
   onRefresh: () => void;
   onCancelAppointment: (id: string) => void;
+  onOpenBooking?: () => void;
 }
 
 export const ScheduleView: React.FC<ScheduleViewProps> = ({
@@ -15,7 +16,8 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
   doctors,
   services,
   onRefresh,
-  onCancelAppointment
+  onCancelAppointment,
+  onOpenBooking
 }) => {
   const [selectedDate, setSelectedDate] = useState('2026-09-22');
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all');
@@ -114,6 +116,16 @@ export const ScheduleView: React.FC<ScheduleViewProps> = ({
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+
+          {onOpenBooking && (
+            <button
+              onClick={onOpenBooking}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>Новая запись</span>
+            </button>
+          )}
         </div>
       </div>
 

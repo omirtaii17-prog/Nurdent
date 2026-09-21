@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import { clinicDb } from "./clinicDb.js";
-import { ChatMessage, AppointmentDraft, SlotInfo } from "../src/types.js";
+import { ChatMessage, AppointmentDraft, SlotInfo, Doctor, ChatAction } from "../src/types.js";
 
 // Initialize GoogleGenAI client lazily or with safety check
 const apiKey = process.env.GEMINI_API_KEY;
@@ -141,8 +141,11 @@ export interface ReceptionistResponse {
   replyText: string;
   appointmentDraft?: AppointmentDraft;
   suggestedSlots?: SlotInfo[];
+  recommendedDoctors?: Doctor[];
+  actions?: ChatAction[];
   quickReplies?: string[];
   isEmergencyAlert?: boolean;
+  needsHandoff?: boolean;
 }
 
 // Execute tool against clinicDb
@@ -248,84 +251,195 @@ function executeTool(name: string, args: any): { result: any; extra?: Partial<Re
   return { result: { error: "Unknown tool" } };
 }
 
-// Fallback rule-based receptionist when Gemini is unavailable
+// Fallback rule-based receptionist when Gemini is unavailable or for instant triage
 function fallbackReceptionist(userMessage: string, history: ChatMessage[]): ReceptionistResponse {
   const text = userMessage.toLowerCase().trim();
 
-  // 1. Emergency safety check
-  if (text.includes("острая боль") || text.includes("болит зуб") || text.includes("очень болит") || text.includes("опухла") || text.includes("отек") || text.includes("кровь")) {
-    const todaySlots = clinicDb.getAvailableSlots({ serviceId: "srv-consult", date: "2026-09-21" });
-    const nextSlots = clinicDb.getAvailableSlots({ serviceId: "srv-consult", date: "2026-09-22" });
-    const urgentSlots = [...todaySlots, ...nextSlots].slice(0, 3);
+  // Kazakh language greetings & inquiries
+  if (text.includes("сәлемет") || text.includes("қайырлы") || text.includes("тісім") || text.includes("емдеу") || text.includes("баға") || text.includes("дәрігер") || text.includes("жазылу")) {
+    const slots = clinicDb.getAvailableSlots({ serviceId: "srv-consult", date: "2026-09-22" });
+    return {
+      replyText: "Сәлеметсіз бе! DentaCare цифрлық стоматология клиникасына қош келдіңіз. Мен — клиниканың AI-әкімшісімін.\n\nБіздің клиникада халықаралық стандарт бойынша ауыртпалықсыз емдеу жүргізіледі. Мен сізге қажетті дәрігерді таңдап, бағасын анықтауға және бос уақытқа жылдам жазылуға көмектесемін.\n\nСізді қандай мәселе немесе тіс мазалап тұр?",
+      suggestedSlots: slots.slice(0, 3),
+      recommendedDoctors: [clinicDb.doctors[0], clinicDb.doctors[1]],
+      actions: [
+        { label: "Дәрігерлер мен кесте", type: "navigate_doctors" },
+        { label: "Қабылдауға жазылу", type: "open_booking" },
+        { label: "2GIS бағыты", type: "open_2gis" }
+      ],
+      quickReplies: ["Тісім қатты ауырып тұр", "Тіс тазалау бағасы қанша?", "Ертеңге жазылуға бола ма?"]
+    };
+  }
+
+  // English inquiries
+  if (text.includes("hello") || text.includes("hi") || text.includes("toothache") || text.includes("doctor") || text.includes("appointment") || text.includes("price") || text.includes("english")) {
+    const slots = clinicDb.getAvailableSlots({ serviceId: "srv-consult", date: "2026-09-22" });
+    return {
+      replyText: "Hello and welcome to DentaCare Dental Clinic in Almaty! I am your AI digital receptionist.\n\nWe provide pain-free digital dentistry, professional hygiene, dental implants, and Damon orthodontic systems. I can help answer your questions, suggest the right specialist, and book your visit.",
+      suggestedSlots: slots.slice(0, 3),
+      recommendedDoctors: [clinicDb.doctors[0], clinicDb.doctors[3]],
+      actions: [
+        { label: "Doctors & Schedule", type: "navigate_doctors" },
+        { label: "Book Appointment", type: "open_booking" },
+        { label: "Get Directions (2GIS)", type: "open_2gis" }
+      ],
+      quickReplies: ["Book appointment tomorrow", "Toothache consultation", "How to find you?"]
+    };
+  }
+
+  // Request for human administrator handoff
+  if (text.includes("человек") || text.includes("оператор") || text.includes("администратор") || text.includes("живой") || text.includes("позвонить") || text.includes("менеджер")) {
+    return {
+      replyText: "Я с радостью передам вас старшему администратору клиники DentaCare! Вы можете прямо сейчас позвонить нам по телефону, написать в WhatsApp или заказать звонок.",
+      needsHandoff: true,
+      actions: [
+        { label: "📞 Позвонить администратору", type: "call_admin" },
+        { label: "💬 Написать в WhatsApp", type: "whatsapp_admin" },
+        { label: "📍 Как нас найти (2GIS)", type: "open_2gis" }
+      ],
+      quickReplies: ["Позвонить в клинику", "Написать в WhatsApp", "Вернуться к записи"]
+    };
+  }
+
+  // 1. Toothache & night pain triage (Requirement: Pain worse at night -> терапевт)
+  if (text.includes("ночью") || text.includes("ноч") || text.includes("пульсирует") || text.includes("болит зуб") || text.includes("острая боль") || text.includes("ноет")) {
+    const docIvan = clinicDb.doctors.find(d => d.id === "doc-1") || clinicDb.doctors[0];
+    const docAsel = clinicDb.doctors.find(d => d.id === "doc-2") || clinicDb.doctors[1];
+    const urgentSlots = clinicDb.getAvailableSlots({ serviceId: "srv-consult", date: "2026-09-22" }).slice(0, 4);
 
     return {
-      replyText: "Понимаю вас, зубная боль — это очень тяжело! Мы обязательно вам поможем. В нашей клинике при острой боли пациенты принимаются без очереди в экстренный коридор дежурного врача.\n\nПожалуйста, ни в коем случае не прикладывайте горячие компрессы к щеке и не кладите анальгин на десну. Могу прямо сейчас записать вас на ближайшее время:",
+      replyText: "Понимаю вас, зубная боль (особенно усиливающаяся ночью или пульсирующая) — это серьезный сигнал, часто связанный с воспалением внутри зуба (пульпит). По международному протоколу важно не терпеть боль и не греть щеку.\n\nЛучше всего начать с консультации стоматолога-терапевта: врач сделает прицельный цифровой снимок, бережно обезболит и сразу устранит причину боли. Ниже рекомендуемые доктора и ближайшие окна для записи:",
       suggestedSlots: urgentSlots,
+      recommendedDoctors: [docIvan, docAsel],
+      actions: [
+        { label: "Записаться к терапевту", type: "open_booking", doctorId: docIvan.id, serviceId: "srv-consult" },
+        { label: "Врачи и портфолио работ", type: "navigate_doctors", doctorId: docIvan.id },
+        { label: "📍 Маршрут в 2GIS", type: "open_2gis" },
+        { label: "📞 Связаться с клиникой", type: "call_admin" }
+      ],
       isEmergencyAlert: true,
-      quickReplies: ["Записаться на ближайшее время", "Срочный осмотр", "Позвонить в клинику"]
+      quickReplies: ["Записаться на завтра", "Срочный прием", "Кто ведет прием?"]
     };
   }
 
-  // 2. Pricing & FAQ questions
-  if (text.includes("чистк") && (text.includes("скольк") || text.includes("цена") || text.includes("стоит"))) {
-    const service = clinicDb.services.find(s => s.id === "srv-cleaning")!;
+  // 2. Orthodontics: Braces, aligners, uneven teeth, bite
+  if (text.includes("брекет") || text.includes("элайнер") || text.includes("прикус") || text.includes("крив") || text.includes("ровн") || text.includes("выровн")) {
+    const docElena = clinicDb.doctors.find(d => d.id === "doc-4") || clinicDb.doctors[3];
+    const orthoSlots = clinicDb.getAvailableSlots({ serviceId: "srv-ortho", doctorId: docElena.id, date: "2026-09-23" }).slice(0, 3);
+
     return {
-      replyText: `Профессиональная комплексная чистка зубов у нас стоит ${service.price.toLocaleString("ru-RU")} ₸.\n\nВ процедуру входит: бережный ультразвук (снятие зубного камня), пескоструйный AirFlow (удаление налета от чая и кофе), полировка эмали и укрепляющее фторирование. Длительность — ${service.duration} минут.\n\nЖелаете выбрать удобный день для визита?`,
-      quickReplies: ["Записаться на чистку завтра", "Показать свободные слоты", "Кто проводит чистку?"]
+      replyText: "Для исправления прикуса и выравнивания зубов вам лучше всего начать с первичной консультации врача-ортодонта.\n\nНаш ведущий ортодонт — Dr. Елена Ким (опыт 11 лет). Доктор работает как с премиальными самолигирующими брекетами Damon, так и с незаметными прозрачными каппами-элайнерами Spark. На приёме доктор проведет осмотр, фотопротокол и составит индивидуальный план лечения.",
+      suggestedSlots: orthoSlots,
+      recommendedDoctors: [docElena],
+      actions: [
+        { label: "Записаться к Dr. Елене Ким", type: "open_booking", doctorId: docElena.id, serviceId: "srv-ortho" },
+        { label: "Смотреть работы ортодонта", type: "navigate_portfolio", doctorId: docElena.id },
+        { label: "Стоимость брекетов и элайнеров", type: "navigate_services", serviceId: "srv-ortho" }
+      ],
+      quickReplies: ["Записаться на консультацию", "Показать работы До/После", "Есть ли рассрочка?"]
     };
   }
 
-  if (text.includes("где вы") || text.includes("находит") || text.includes("адрес") || text.includes("парковк")) {
+  // 3. Implants & Missing teeth
+  if (text.includes("имплант") || text.includes("нет зуба") || text.includes("вставить зуб") || text.includes("удалить зуб") || text.includes("мудрост")) {
+    const docMarat = clinicDb.doctors.find(d => d.id === "doc-3") || clinicDb.doctors[2];
+    const srvId = text.includes("имплант") ? "srv-implant" : "srv-extraction";
+    const surgSlots = clinicDb.getAvailableSlots({ serviceId: srvId, doctorId: docMarat.id, date: "2026-09-22" }).slice(0, 3);
+
     return {
-      replyText: `Мы находимся по адресу: ${clinicDb.clinicInfo.address} (${clinicDb.clinicInfo.landmark}).\n\nДля наших пациентов действует ${clinicDb.clinicInfo.parking.toLowerCase()}.\n\nПодсказать, как лучше проехать, или помочь записаться на приём?`,
-      quickReplies: ["Записаться на приём", "График работы", "Стоимость услуг"]
+      replyText: "Для восстановления отсутствующего зуба или удаления зуба мудрости необходима консультация челюстно-лицевого хирурга-имплантолога.\n\nОперации у нас проводит Dr. Марат Жумабаев (стаж 16 лет, более 4 500 успешно установленных имплантатов Osstem и Straumann). Мы используем 3D-навигационные шаблоны и атравматичный ультразвуковой пьезотом, что гарантирует быстрое заживление без отеков.",
+      suggestedSlots: surgSlots,
+      recommendedDoctors: [docMarat],
+      actions: [
+        { label: "Записаться к Dr. Марату Жумабаеву", type: "open_booking", doctorId: docMarat.id, serviceId: srvId },
+        { label: "Посмотреть клинические работы", type: "navigate_portfolio", doctorId: docMarat.id },
+        { label: "Рассрочка на имплантацию", type: "navigate_services", serviceId: "srv-implant" }
+      ],
+      quickReplies: ["Записаться на 22 сентября", "Сколько стоит имплантация?", "Показать расписание врача"]
     };
   }
 
-  if (text.includes("до скольки") || text.includes("график") || text.includes("режим") || text.includes("часы работ")) {
+  // 4. Pediatric dentistry
+  if (text.includes("ребен") || text.includes("детск") || text.includes("малыш") || text.includes("доч") || text.includes("сын")) {
+    const docDaniyar = clinicDb.doctors.find(d => d.id === "doc-5") || clinicDb.doctors[4];
+    const pedSlots = clinicDb.getAvailableSlots({ serviceId: "srv-pediatric", doctorId: docDaniyar.id, date: "2026-09-22" }).slice(0, 3);
+
     return {
-      replyText: `Клиника DentaCare работает ежедневно:\n• Понедельник – Суббота: ${clinicDb.clinicInfo.workingHoursWeekdays}\n• Воскресенье: 09:00 – 18:00\n\nМы работаем без перерыва. На какой день вам было бы удобно подойти?`,
+      replyText: "Для маленьких пациентов у нас создано специальное детское отделение! Приём ведет Dr. Данияр Оспанов (опыт 8 лет, врач высшей категории).\n\nЛечение проходит в игровой форме без уколов и страха: над креслом установлен экран с любимыми мультфильмами, используются биосовместимые цветные пломбы, а в конце визита доктор вручает малышу медаль и подарок за храбрость!",
+      suggestedSlots: pedSlots,
+      recommendedDoctors: [docDaniyar],
+      actions: [
+        { label: "Записать ребёнка к Dr. Данияру", type: "open_booking", doctorId: docDaniyar.id, serviceId: "srv-pediatric" },
+        { label: "Профиль и отзывы врача", type: "navigate_doctors", doctorId: docDaniyar.id }
+      ],
+      quickReplies: ["Записаться на завтра", "Сколько длится приём?", "Цены на детский приём"]
+    };
+  }
+
+  // 5. Whitening & Hygiene
+  if (text.includes("чистк") || text.includes("гигиен") || text.includes("отбеливан") || text.includes("airflow") || text.includes("налет")) {
+    const docAsel = clinicDb.doctors.find(d => d.id === "doc-2") || clinicDb.doctors[1];
+    const srv = text.includes("отбеливан") ? clinicDb.services.find(s => s.id === "srv-whitening")! : clinicDb.services.find(s => s.id === "srv-cleaning")!;
+    const cleanSlots = clinicDb.getAvailableSlots({ serviceId: srv.id, doctorId: docAsel.id, date: "2026-09-22" }).slice(0, 4);
+
+    return {
+      replyText: `Процедуру ${srv.name.toLowerCase()} проводит Dr. Асель Касымова (опыт 9 лет, сертифицированный гигиенист).\n\nСтоимость процедуры: ${srv.price.toLocaleString("ru-RU")} ₸. Мы применяем оригинальный швейцарский аппарат AirFlow с мягким порошком на основе глицина и систему холодного фотоотбеливания Beyond Polus без повышения чувствительности эмали.`,
+      suggestedSlots: cleanSlots,
+      recommendedDoctors: [docAsel],
+      actions: [
+        { label: `Записаться на ${srv.name}`, type: "open_booking", doctorId: docAsel.id, serviceId: srv.id },
+        { label: "Работы До/После отбеливания", type: "navigate_portfolio", doctorId: docAsel.id }
+      ],
+      quickReplies: ["Записаться на завтра", "Показать свободное время", "Где вы находитесь?"]
+    };
+  }
+
+  // 6. Address & 2GIS
+  if (text.includes("где вы") || text.includes("находит") || text.includes("адрес") || text.includes("парковк") || text.includes("2gis") || text.includes("доехать")) {
+    return {
+      replyText: `Мы находимся по адресу: ${clinicDb.clinicInfo.address} (${clinicDb.clinicInfo.landmark}).\n\nДля наших пациентов действует ${clinicDb.clinicInfo.parking.toLowerCase()}.\n\nВы можете открыть маршрут прямо в приложении 2GIS:`,
+      actions: [
+        { label: "📍 Как нас найти (Маршрут в 2GIS)", type: "open_2gis" },
+        { label: "Записаться на приём", type: "open_booking" },
+        { label: "📞 Позвонить в клинику", type: "call_admin" }
+      ],
+      quickReplies: ["Открыть 2GIS маршрут", "График работы", "Записаться на приём"]
+    };
+  }
+
+  // 7. Working hours
+  if (text.includes("до скольки") || text.includes("график") || text.includes("режим") || text.includes("часы работ") || text.includes("время работ")) {
+    return {
+      replyText: `Клиника DentaCare открыта для вас каждый день без перерыва на обед:\n• Понедельник – Суббота: ${clinicDb.clinicInfo.workingHoursWeekdays}\n• Воскресенье: ${clinicDb.clinicInfo.workingHoursWeekend}\n\nНа какой день вам удобнее запланировать консультацию?`,
+      actions: [
+        { label: "Записаться на приём", type: "open_booking" },
+        { label: "Расписание врачей", type: "navigate_doctors" }
+      ],
       quickReplies: ["Записаться на завтра", "Записаться на выходные", "Посмотреть услуги"]
     };
   }
 
-  if (text.includes("ребен") || text.includes("детск")) {
-    const srv = clinicDb.services.find(s => s.id === "srv-pediatric")!;
-    const doc = clinicDb.doctors.find(d => d.id === "doc-5")!;
-    return {
-      replyText: `Да, конечно! У нас замечательное детское отделение и добрый врач ${doc.name}. Приём проходит в игровой адаптационной форме, на потолке телевизор с мультиками, а после приёма малыш получает подарок смельчака! Стоимость детского приёма — ${srv.price.toLocaleString("ru-RU")} ₸.\n\nСколько лет вашему ребёнку и на какой день хотите запланировать визит?`,
-      quickReplies: ["Записать ребёнка на завтра", "Расписание детского врача", "Подробнее об отделении"]
-    };
-  }
-
+  // 8. Installments & Banks
   if (text.includes("рассрочк") || text.includes("каспи") || text.includes("kaspi") || text.includes("halyk") || text.includes("кредит")) {
     return {
-      replyText: `Да, у нас действует рассрочка!\n• Kaspi Red на 3 месяца\n• Kaspi Рассрочка 0-0-12 (до 12 месяцев без переплат)\n• Halyk Bank до 24 месяцев на установку имплантатов и брекетов.\n\nОформить рассрочку можно прямо у нас на ресепшене через мобильное приложение за 2 минуты.`,
+      replyText: "Да, у нас действует честная рассрочка 0% без переплат и скрытых комиссий:\n• Kaspi Red на 3 месяца\n• Kaspi Рассрочка 0-0-12 (до 12 месяцев)\n• Halyk Bank до 24 месяцев на установку имплантатов и брекетов.\n\nОформление занимает ровно 2 минуты через приложение банка прямо на ресепшене.",
+      actions: [
+        { label: "Услуги и цены", type: "navigate_services" },
+        { label: "Записаться на осмотр", type: "open_booking" }
+      ],
       quickReplies: ["Записаться на консультацию", "Прайс-лист услуг", "Где вы находитесь?"]
     };
   }
 
-  if (text.includes("подготов") || text.includes("перед прием")) {
-    return {
-      replyText: `Подготовиться к приёму очень просто:\n1. Рекомендуем плотно перекусить за 1–1.5 часа до визита (после анестезии 2 часа не рекомендуется есть, а на сытый желудок меньше вырабатывается слюна).\n2. Почистить зубы щеткой и пастой.\n3. За сутки воздержаться от алкоголя.\n\nЕсли у вас есть свежие рентген-снимки, обязательно возьмите их с собой!`,
-      quickReplies: ["Записаться на приём", "Сколько стоит чистка?", "Наши врачи"]
-    };
-  }
-
-  // 3. Booking flow: "записаться на чистку завтра"
+  // 9. Booking flow: service + date + time + phone
   const service = clinicDb.findService(text) || clinicDb.services.find(s => s.id === "srv-cleaning")!;
   const cleanDate = normalizeDateString(text);
-
-  // Check if patient selected a specific time e.g. "14:00" or "в 14:00"
   const timeMatch = text.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
   const selectedTime = timeMatch ? timeMatch[0].padStart(5, "0") : null;
-
-  // Check for phone number and name in history or current message
   const phoneMatch = text.match(/(?:\+?7|8)?[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}/);
   const nameMatch = text.match(/(?:меня зовут|я|имя)\s+([А-Яа-яA-Za-z]+)/i) || 
-    (text.split(/[\s,]+/).find(w => /^[А-ЯA-Z][а-яa-z]{2,15}$/.test(w) && !["Завтра", "Сегодня", "Конечно", "Отлично", "Можно", "Чистка"].includes(w)));
+    (text.split(/[\s,]+/).find(w => /^[А-ЯA-Z][а-яa-z]{2,15}$/.test(w) && !["Завтра", "Сегодня", "Конечно", "Отлично", "Можно", "Чистка", "Здравствуйте"].includes(w)));
 
-  // Extract previous context from history
   let prevDraft: AppointmentDraft | undefined;
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].appointmentDraft) {
@@ -334,11 +448,10 @@ function fallbackReceptionist(userMessage: string, history: ChatMessage[]): Rece
     }
   }
 
-  // If user selected a time and provided details or wants to confirm
   if (selectedTime && (phoneMatch || text.includes("алия") || prevDraft)) {
     const patientName = nameMatch ? (typeof nameMatch === "string" ? nameMatch : nameMatch[1]) : (text.includes("алия") ? "Алия" : "Алия");
     const patientPhone = phoneMatch ? phoneMatch[0] : "+7 (777) 123-45-67";
-    const doctor = clinicDb.doctors[0]; // Dr. Ivan
+    const doctor = clinicDb.doctors.find(d => service.doctorIds.includes(d.id)) || clinicDb.doctors[0];
 
     const draft: AppointmentDraft = {
       patientName,
@@ -354,13 +467,15 @@ function fallbackReceptionist(userMessage: string, history: ChatMessage[]): Rece
     };
 
     return {
-      replyText: `Отлично! Я сформировал предварительную запись на ${service.name.toLowerCase()} на ${formatRussianDate(cleanDate)} в ${selectedTime}.\n\nПожалуйста, проверьте данные ниже и нажмите «Подтвердить», чтобы закрепить за вами слот:`,
+      replyText: `Отлично! Я сформировала предварительную запись на «${service.name}» к врачу ${doctor.name} на ${formatRussianDate(cleanDate)} в ${selectedTime}.\n\nПожалуйста, проверьте данные ниже и нажмите «Подтвердить», чтобы закрепить за вами слот:`,
       appointmentDraft: draft,
+      actions: [
+        { label: "📍 Как проехать (2GIS)", type: "open_2gis" }
+      ],
       quickReplies: ["Подтвердить запись", "Выбрать другое время"]
     };
   }
 
-  // If user asked: "Можно записаться на чистку завтра?"
   if (text.includes("записат") || text.includes("хочу") || text.includes("слот") || text.includes("свободн")) {
     const slots = clinicDb.getAvailableSlots({
       serviceId: service.id,
@@ -368,41 +483,54 @@ function fallbackReceptionist(userMessage: string, history: ChatMessage[]): Rece
     });
 
     if (slots.length > 0) {
-      // Pick representative slots like 11:30, 14:00, 17:30
       const displaySlots = slots.slice(0, 4);
       const timesStr = displaySlots.map(s => s.time).join(", ");
 
       return {
-        replyText: `Конечно! На ${formatRussianDate(cleanDate)} есть свободные места в ${timesStr}. Какое время вам удобнее?`,
+        replyText: `Конечно! На ${formatRussianDate(cleanDate)} есть свободные окна на «${service.name}» в ${timesStr}. Какое время вам удобнее?`,
         suggestedSlots: displaySlots,
+        recommendedDoctors: [clinicDb.doctors.find(d => service.doctorIds.includes(d.id)) || clinicDb.doctors[0]],
+        actions: [
+          { label: "Открыть форму записи", type: "open_booking", serviceId: service.id }
+        ],
         quickReplies: displaySlots.map(s => `В ${s.time}`)
       };
     } else {
       const nearest = clinicDb.findNearestAvailableSlots(service.id, cleanDate);
       return {
-        replyText: `На выбранную дату (${formatRussianDate(cleanDate)}) свободных мест сейчас нет. Могу посмотреть ближайшие доступные даты. Например, есть свободные слоты на ${nearest.map(n => formatRussianDate(n.date)).join(" и ")}. Подойдет?`,
+        replyText: `На выбранную дату (${formatRussianDate(cleanDate)}) свободных мест сейчас нет. Могу предложить ближайшие доступные слоты:`,
         suggestedSlots: nearest.flatMap(n => n.slots).slice(0, 4),
+        actions: [
+          { label: "Посмотреть расписание врачей", type: "navigate_doctors" }
+        ],
         quickReplies: nearest.flatMap(n => n.slots.map(s => `${formatRussianDate(s.date)} в ${s.time}`)).slice(0, 3)
       };
     }
   }
 
-  // If user replied with just a time like "14:00" or "в 14:00"
   if (selectedTime) {
     return {
-      replyText: `Отлично. Записываю вас на ${service.name.toLowerCase()} ${formatRussianDate(cleanDate)} в ${selectedTime}.\n\nПодскажите, пожалуйста, ваше имя и номер телефона для подтверждения.`,
+      replyText: `Отлично! Записываю вас на «${service.name}» ${formatRussianDate(cleanDate)} в ${selectedTime}.\n\nПодскажите, пожалуйста, ваше имя и номер телефона для подтверждения.`,
       quickReplies: ["Алия, +7 (707) 333-55-77", "Меня зовут Ерлан, +7 (701) 555-12-34"]
     };
   }
 
-  // Default friendly clinic welcome
+  // Default digital clinic receptionist welcome
   return {
-    replyText: `Здравствуйте! Рада приветствовать вас в клинике DentaCare. Меня зовут Аида, я AI-администратор клиники.\n\nЯ могу рассказать вам о наших процедурах и ценах, проверить график врачей и записать вас на удобное время. Чем я могу вам помочь?`,
+    replyText: "Здравствуйте! Рада приветствовать вас в клинике цифровой стоматологии DentaCare. Меня зовут Аида, я ваш персональный AI-администратор.\n\nОпишите вашу проблему или цель (например: «Болит зуб ночью», «Хочу брекеты», «Нужна чистка зубов» или «Хочу восстановить зуб»), и я помогу вам подобрать лучшего специалиста, посмотреть его работы и сразу записаться на удобное время!",
+    recommendedDoctors: clinicDb.doctors.slice(0, 3),
+    actions: [
+      { label: "👨‍⚕️ Врачи и расписание", type: "navigate_doctors" },
+      { label: "📋 Услуги и прайс-лист", type: "navigate_services" },
+      { label: "📍 Как нас найти (2GIS)", type: "open_2gis" },
+      { label: "📞 AI-звонок в клинику", type: "voice_call" }
+    ],
     quickReplies: [
-      "Можно записаться на чистку завтра?",
-      "Сколько стоит лечение кариеса?",
-      "Где вы находитесь и есть ли парковка?",
-      "Есть ли рассрочка Kaspi?"
+      "Болит зуб и боль усиливается ночью",
+      "Хочу поставить брекеты",
+      "Хочу имплант",
+      "Сколько стоит чистка зубов?",
+      "Как до вас доехать в 2GIS?"
     ]
   };
 }
@@ -437,6 +565,35 @@ export async function processReceptionistChat(
 4. ПОДТВЕРЖДЕНИЕ ЗАПИСИ:
 Когда пациент выбрал время и назвал имя/телефон, ОБЯЗАТЕЛЬНО вызови инструмент prepare_booking_confirmation, чтобы в чате появилась красивая карточка подтверждения с кнопками [Подтвердить] и [Изменить].
 5. Цены всегда в тенге (₸).`;
+
+    // Determine context-based suggested actions and recommended doctors
+    const userLower = userMessage.toLowerCase();
+    const actions: ChatAction[] = [];
+    let recDocs: Doctor[] | undefined;
+
+    if (userLower.includes("болит") || userLower.includes("ноч") || userLower.includes("зуб")) {
+      recDocs = [clinicDb.doctors[0], clinicDb.doctors[1]];
+      actions.push({ label: "Записаться к терапевту", type: "open_booking", doctorId: "doc-1", serviceId: "srv-consult" });
+      actions.push({ label: "Врачи и портфолио", type: "navigate_doctors" });
+    } else if (userLower.includes("брекет") || userLower.includes("элайнер") || userLower.includes("прикус")) {
+      recDocs = [clinicDb.doctors[3]];
+      actions.push({ label: "Записаться к ортодонту", type: "open_booking", doctorId: "doc-4", serviceId: "srv-ortho" });
+      actions.push({ label: "Портфолио ортодонта", type: "navigate_portfolio", doctorId: "doc-4" });
+    } else if (userLower.includes("имплант") || userLower.includes("удал")) {
+      recDocs = [clinicDb.doctors[2]];
+      actions.push({ label: "Записаться к хирургу", type: "open_booking", doctorId: "doc-3", serviceId: "srv-implant" });
+      actions.push({ label: "Работы по имплантации", type: "navigate_portfolio", doctorId: "doc-3" });
+    } else if (userLower.includes("ребен") || userLower.includes("детск")) {
+      recDocs = [clinicDb.doctors[4]];
+      actions.push({ label: "Записать ребёнка", type: "open_booking", doctorId: "doc-5", serviceId: "srv-pediatric" });
+    }
+
+    if (userLower.includes("где") || userLower.includes("адрес") || userLower.includes("2gis") || userLower.includes("доехать")) {
+      actions.push({ label: "📍 Как нас найти (2GIS)", type: "open_2gis" });
+    }
+    if (userLower.includes("человек") || userLower.includes("администратор") || userLower.includes("позвонить")) {
+      actions.push({ label: "📞 Позвонить администратору", type: "call_admin" });
+    }
 
     // Map conversation history
     const contents: any[] = [];
@@ -506,14 +663,20 @@ export async function processReceptionistChat(
         }
       });
 
+      const replyText = secondResponse.text || "Буду рада помочь вам с записью на приём в DentaCare!";
       return {
-        replyText: secondResponse.text || "Буду рада помочь вам с записью на приём в DentaCare!",
+        replyText,
+        recommendedDoctors: extraInfo.recommendedDoctors || recDocs,
+        actions: extraInfo.actions || (actions.length > 0 ? actions : undefined),
         ...extraInfo
       };
     }
 
+    const replyText = response.text || fallbackReceptionist(userMessage, history).replyText;
     return {
-      replyText: response.text || fallbackReceptionist(userMessage, history).replyText,
+      replyText,
+      recommendedDoctors: extraInfo.recommendedDoctors || recDocs,
+      actions: extraInfo.actions || (actions.length > 0 ? actions : undefined),
       ...extraInfo
     };
   } catch (error) {

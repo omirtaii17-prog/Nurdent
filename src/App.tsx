@@ -9,10 +9,16 @@ import { ChatView } from './components/ChatView.js';
 import { ScheduleView } from './components/ScheduleView.js';
 import { ServicesAdmin } from './components/ServicesAdmin.js';
 import { DoctorsAdmin } from './components/DoctorsAdmin.js';
+import { DoctorsShowcase } from './components/DoctorsShowcase.js';
+import { DoctorProfileModal } from './components/DoctorProfileModal.js';
+import { BookingModal } from './components/BookingModal.js';
+import { GisMapModal } from './components/GisMapModal.js';
+import { VoiceReceptionistModal } from './components/VoiceReceptionistModal.js';
 import { RemindersAdmin } from './components/RemindersAdmin.js';
 import { FaqAdmin } from './components/FaqAdmin.js';
 import { MedicalSafetyModal } from './components/MedicalSafetyModal.js';
 import { ClinicInfo, Service, Doctor, Appointment, ReminderSettings, ReminderLog, FaqItem } from './types.js';
+import { Users, Settings, Sparkles } from 'lucide-react';
 
 const defaultClinicInfo: ClinicInfo = {
   name: 'DentaCare',
@@ -30,11 +36,13 @@ const defaultClinicInfo: ClinicInfo = {
     'Halyk Bank Рассрочка до 12 месяцев'
   ],
   landmark: 'Напротив ТРЦ «Достык», отдельный вход со стороны проспекта с вывеской DentaCare',
-  emergencyPolicy: 'При острой боли и отеках приём дежурным врачом вне очереди'
+  emergencyPolicy: 'При острой боли и отеках приём дежурным врачом вне очереди',
+  gisUrl: 'https://2gis.kz/almaty/search/%D0%BF%D1%80%D0%BE%D1%81%D0%BF%D0%B5%D0%BA%D1%82%20%D0%94%D0%BE%D1%81%D1%82%D1%8B%D0%BA%20128'
 };
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'chat' | 'schedule' | 'services' | 'doctors' | 'reminders' | 'faq'>('chat');
+  const [doctorsSubView, setDoctorsSubView] = useState<'showcase' | 'admin'>('showcase');
   const [clinicInfo, setClinicInfo] = useState<ClinicInfo>(defaultClinicInfo);
   const [services, setServices] = useState<Service[]>([]);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -49,7 +57,16 @@ export default function App() {
   });
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>([]);
   const [faq, setFaq] = useState<FaqItem[]>([]);
+
+  // Modals state
   const [isSafetyModalOpen, setIsSafetyModalOpen] = useState(false);
+  const [isGisModalOpen, setIsGisModalOpen] = useState(false);
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isBookingModalOpen, setIsBookingModalOpen] = useState(false);
+  const [selectedDoctorForProfile, setSelectedDoctorForProfile] = useState<Doctor | null>(null);
+  const [bookingInitialServiceId, setBookingInitialServiceId] = useState<string | undefined>();
+  const [bookingInitialDoctorId, setBookingInitialDoctorId] = useState<string | undefined>();
+
   const [isLoading, setIsLoading] = useState(true);
 
   const loadAllData = async () => {
@@ -109,6 +126,16 @@ export default function App() {
     }
   };
 
+  const handleOpenBooking = (serviceId?: string, doctorId?: string) => {
+    setBookingInitialServiceId(serviceId);
+    setBookingInitialDoctorId(doctorId);
+    setIsBookingModalOpen(true);
+  };
+
+  const handleBookDoctor = (doctor: Doctor) => {
+    handleOpenBooking(undefined, doctor.id);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans antialiased">
       {/* Clinic Header & Navigation */}
@@ -117,6 +144,9 @@ export default function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         onOpenSafetyModal={() => setIsSafetyModalOpen(true)}
+        onOpenGis={() => setIsGisModalOpen(true)}
+        onOpenVoice={() => setIsVoiceModalOpen(true)}
+        onOpenBooking={() => handleOpenBooking()}
         pendingRemindersCount={appointments.length}
       />
 
@@ -135,7 +165,58 @@ export default function App() {
               <ChatView
                 clinicInfo={clinicInfo}
                 onAppointmentCreated={loadAllData}
+                onOpenGis={() => setIsGisModalOpen(true)}
+                onOpenBooking={handleOpenBooking}
+                onOpenDoctorProfile={doctor => setSelectedDoctorForProfile(doctor)}
+                onOpenVoice={() => setIsVoiceModalOpen(true)}
               />
+            )}
+
+            {activeTab === 'doctors' && (
+              <div className="space-y-4">
+                {/* Sub-navigation between patient showcase and admin schedule management */}
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2 bg-slate-200/80 p-1 rounded-2xl text-xs font-semibold">
+                    <button
+                      onClick={() => setDoctorsSubView('showcase')}
+                      className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                        doctorsSubView === 'showcase'
+                          ? 'bg-white text-teal-800 shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-teal-600" />
+                      <span>Каталог врачей и До/После</span>
+                    </button>
+                    <button
+                      onClick={() => setDoctorsSubView('admin')}
+                      className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-1.5 ${
+                        doctorsSubView === 'admin'
+                          ? 'bg-white text-teal-800 shadow-xs font-bold'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Settings className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Настройка рабочих часов</span>
+                    </button>
+                  </div>
+                </div>
+
+                {doctorsSubView === 'showcase' ? (
+                  <DoctorsShowcase
+                    doctors={doctors}
+                    services={services}
+                    onSelectDoctor={doctor => setSelectedDoctorForProfile(doctor)}
+                    onBookDoctor={handleBookDoctor}
+                  />
+                ) : (
+                  <DoctorsAdmin
+                    doctors={doctors}
+                    services={services}
+                    onRefresh={loadAllData}
+                  />
+                )}
+              </div>
             )}
 
             {activeTab === 'schedule' && (
@@ -145,6 +226,7 @@ export default function App() {
                 services={services}
                 onRefresh={loadAllData}
                 onCancelAppointment={handleCancelAppointment}
+                onOpenBooking={() => handleOpenBooking()}
               />
             )}
 
@@ -152,14 +234,6 @@ export default function App() {
               <ServicesAdmin
                 services={services}
                 doctors={doctors}
-                onRefresh={loadAllData}
-              />
-            )}
-
-            {activeTab === 'doctors' && (
-              <DoctorsAdmin
-                doctors={doctors}
-                services={services}
                 onRefresh={loadAllData}
               />
             )}
@@ -183,6 +257,47 @@ export default function App() {
           </>
         )}
       </main>
+
+      {/* 2GIS Map and Route Modal */}
+      <GisMapModal
+        isOpen={isGisModalOpen}
+        onClose={() => setIsGisModalOpen(false)}
+        clinicInfo={clinicInfo}
+      />
+
+      {/* Doctor Profile & Clinical Cases Modal */}
+      <DoctorProfileModal
+        doctor={selectedDoctorForProfile}
+        services={services}
+        onClose={() => setSelectedDoctorForProfile(null)}
+        onBookDoctor={handleBookDoctor}
+      />
+
+      {/* Multi-step Booking Modal */}
+      <BookingModal
+        isOpen={isBookingModalOpen}
+        onClose={() => setIsBookingModalOpen(false)}
+        services={services}
+        doctors={doctors}
+        clinicInfo={clinicInfo}
+        initialServiceId={bookingInitialServiceId}
+        initialDoctorId={bookingInitialDoctorId}
+        onAppointmentCreated={loadAllData}
+        onOpenGis={() => setIsGisModalOpen(true)}
+      />
+
+      {/* AI Voice Receptionist & Architecture Modal */}
+      <VoiceReceptionistModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        clinicInfo={clinicInfo}
+        doctors={doctors}
+        services={services}
+        onBookAppointmentFromVoice={() => {
+          setIsVoiceModalOpen(false);
+          handleOpenBooking();
+        }}
+      />
 
       {/* Medical Safety Standards Modal */}
       <MedicalSafetyModal

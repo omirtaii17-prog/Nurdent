@@ -18,7 +18,8 @@ export const clinicInfo: ClinicInfo = {
     "Halyk Bank (рассрочка до 24 месяцев на имплантацию и брекеты)",
     "Оплата картой Visa / Mastercard, наличный и безналичный расчет"
   ],
-  emergencyPolicy: "При острой зубной боли, травме или отеке мы принимаем вне очереди по экстренному коридору дежурного врача!"
+  emergencyPolicy: "При острой зубной боли, травме или отеке мы принимаем вне очереди по экстренному коридору дежурного врача!",
+  gisUrl: "https://2gis.kz/almaty/search/%D0%B3.%20%D0%90%D0%BB%D0%BC%D0%B0%D1%82%D1%8B%2C%20%D0%BF%D1%80.%20%D0%94%D0%BE%D1%81%D1%82%D1%8B%D0%BA%2C%20128"
 };
 
 export const defaultServices: Service[] = [
@@ -129,66 +130,211 @@ export const defaultDoctors: Doctor[] = [
     id: "doc-1",
     name: "Dr. Ivan (Иван Смирнов)",
     specialty: "Главный врач, стоматолог-терапевт, ортопед",
-    avatar: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=200&h=200&fit=crop&crop=face",
+    avatar: "https://images.unsplash.com/photo-1622253692010-333f2da6031d?w=400&h=400&fit=crop&crop=face",
+    experienceYears: 14,
     workDays: [1, 2, 3, 4, 5], // Пн, Вт, Ср, Чт, Пт
     workHours: { start: "09:00", end: "18:00" },
     breakHours: { start: "13:00", end: "14:00" },
     slotInterval: 45,
     serviceIds: ["srv-consult", "srv-caries", "srv-cleaning", "srv-canal", "srv-crown"],
-    bio: "Опыт работы 14 лет. Эксперт по цифровой реставрации зубов и комплексному протезированию. Член Европейской ассоциации эстетической стоматологии.",
-    rating: 4.9
+    bio: "Опыт работы 14 лет. Эксперт по цифровой реставрации зубов под микроскопом и комплексному протезированию. Член Европейской ассоциации эстетической стоматологии.",
+    rating: 4.9,
+    focusAreas: [
+      "Эстетическая реставрация зубов Estelite",
+      "Лечение корневых каналов под микроскопом",
+      "Керамические коронки E-max и цирконий",
+      "Лечение глубокого кариеса и пульпита"
+    ],
+    portfolio: [
+      {
+        id: "case-1-1",
+        title: "Художественная реставрация скола центрального резца",
+        category: "Эстетическая терапия",
+        description: "Травматический скол режущего края 2.1 зуба. Анатомическое послойное восстановление наногибридным композитом Estelite Asteria с воссозданием прозрачности эмали и микрорельефа.",
+        beforeImage: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=700&h=450&fit=crop",
+        durationText: "1 визит • 60 минут",
+        tags: ["Микроскоп", "Estelite", "Реставрация"]
+      },
+      {
+        id: "case-1-2",
+        title: "Керамическая коронка E-max на жевательный моляр",
+        category: "Ортопедия",
+        description: "Разрушение зуба 4.6 на 75% после старой пломбы. Эндодонтическая ревизия каналов, цифровое 3D-сканирование и фиксация сверхточной цельнокерамической коронки E-max.",
+        beforeImage: "https://images.unsplash.com/photo-1598256989800-fe5f95da9787?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=700&h=450&fit=crop",
+        durationText: "2 визита • 5 дней",
+        tags: ["Цифровой 3D-скан", "E-max", "Анатомия"]
+      }
+    ]
   },
   {
     id: "doc-2",
     name: "Dr. Асель Касымова",
     specialty: "Стоматолог-терапевт, гигиенист, специалист по отбеливанию",
-    avatar: "https://images.unsplash.com/photo-1594824813589-3221b6562092?w=200&h=200&fit=crop&crop=face",
-    workDays: [1, 2, 3, 4, 6], // Пн, Вт, Ср, Чт, Сб
+    avatar: "https://images.unsplash.com/photo-1594824813589-3221b6562092?w=400&h=400&fit=crop&crop=face",
+    experienceYears: 9,
+    workDays: [1, 2, 3, 4, 6], // Пн, Вт, Ср, Чт, Сб (Пятница выходной)
     workHours: { start: "10:00", end: "19:00" },
     breakHours: { start: "14:00", end: "15:00" },
     slotInterval: 45,
     serviceIds: ["srv-consult", "srv-caries", "srv-cleaning", "srv-whitening", "srv-canal"],
-    bio: "Опыт 9 лет. Сертифицированный специалист по деликатной ультразвуковой чистке AirFlow и аппаратному отбеливанию Beyond Polus.",
-    rating: 5.0
+    bio: "Опыт 9 лет. Сертифицированный специалист по деликатной ультразвуковой чистке AirFlow и аппаратному отбеливанию Beyond Polus. Бережный и заботливый подход к чувствительным зубам.",
+    rating: 5.0,
+    focusAreas: [
+      "Холодное аппаратное отбеливание Beyond Polus",
+      "Комплексная гигиена полости рта AirFlow",
+      "Лечение пришеечного кариеса без сверления",
+      "Укрепление и реминерализация эмали"
+    ],
+    portfolio: [
+      {
+        id: "case-2-1",
+        title: "Клиническое аппаратное отбеливание Beyond Polus",
+        category: "Отбеливание",
+        description: "Осветление природного оттенка эмали с А3.5 до оттенка В1 (на 7 тонов светлее по шкале VITA). Процедура с нанесением десенситайзера против чувствительности.",
+        beforeImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-daab30f310ce?w=700&h=450&fit=crop",
+        durationText: "1 визит • 60 минут",
+        tags: ["Beyond Polus", "Без чувствительности", "+7 тонов"]
+      },
+      {
+        id: "case-2-2",
+        title: "Комплексная гигиена AirFlow при плотном пигменте",
+        category: "Гигиена и профилактика",
+        description: "Удаление плотного никотинового налета и поддесневых зубных камней ультразвуком. Полировка нано-пастой и защитное глубокое фторирование эмали.",
+        beforeImage: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=700&h=450&fit=crop",
+        durationText: "1 визит • 45 минут",
+        tags: ["AirFlow", "Ультразвук", "Фторирование"]
+      }
+    ]
   },
   {
     id: "doc-3",
     name: "Dr. Марат Жумабаев",
     specialty: "Стоматолог-хирург, челюстно-лицевой хирург, имплантолог",
-    avatar: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=200&h=200&fit=crop&crop=face",
-    workDays: [2, 3, 4, 5, 6], // Вт, Ср, Чт, Пт, Сб
+    avatar: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?w=400&h=400&fit=crop&crop=face",
+    experienceYears: 16,
+    workDays: [2, 3, 4, 5, 6], // Вт, Ср, Чт, Пт, Сб (Понедельник выходной)
     workHours: { start: "09:30", end: "18:30" },
     breakHours: { start: "13:30", end: "14:30" },
     slotInterval: 45,
     serviceIds: ["srv-consult", "srv-extraction", "srv-implant"],
-    bio: "Опыт 16 лет. Провёл более 4 500 успешных операций по установке имплантатов. Безболезненное удаление зубов любой сложности.",
-    rating: 4.95
+    bio: "Опыт 16 лет. Провёл более 4 500 успешных операций по установке имплантатов. Эксперт по навигационной 3D-хирургии и атравматичному удалению зубов мудрости любой сложности.",
+    rating: 4.95,
+    focusAreas: [
+      "Дентальная имплантация Osstem и Straumann",
+      "Одномоментная имплантация сразу после удаления",
+      "Удаление дистопированных и ретинированных зубов мудрости",
+      "Синус-лифтинг и направленная костная пластика"
+    ],
+    portfolio: [
+      {
+        id: "case-3-1",
+        title: "Одномоментная имплантация Osstem TS-III в зоне улыбки",
+        category: "Имплантация",
+        description: "Удаление корня сломанного зуба 1.2 с немедленной установкой оригинального титанового имплантата Osstem по 3D-шаблону и временной коронки в день операции.",
+        beforeImage: "https://images.unsplash.com/photo-1598256989800-fe5f95da9787?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=700&h=450&fit=crop",
+        durationText: "1 визит (операция) • 75 минут",
+        tags: ["Одномоментно", "Osstem TS-III", "3D-навигация"]
+      },
+      {
+        id: "case-3-2",
+        title: "Пьезохирургическое удаление ретинированного зуба мудрости",
+        category: "Хирургия",
+        description: "Горизонтальное залегание зуба 3.8 вблизи нижнечелюстного нерва. Атравматичное удаление ультразвуковым пьезотомом без отека и синяков.",
+        beforeImage: "https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=700&h=450&fit=crop",
+        durationText: "1 визит • 45 минут",
+        tags: ["Пьезохирургия", "Зуб мудрости", "Без боли"]
+      }
+    ]
   },
   {
     id: "doc-4",
     name: "Dr. Елена Ким",
     specialty: "Врач-ортодонт (брекет-системы и прозрачные элайнеры)",
-    avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=200&h=200&fit=crop&crop=face",
-    workDays: [1, 3, 5, 6], // Пн, Ср, Пт, Сб
+    avatar: "https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=400&h=400&fit=crop&crop=face",
+    experienceYears: 11,
+    workDays: [1, 3, 5, 6], // Пн, Ср, Пт, Сб (Вт, Чт, Вс выходной)
     workHours: { start: "11:00", end: "20:00" },
     breakHours: { start: "15:00", end: "16:00" },
     slotInterval: 45,
     serviceIds: ["srv-consult", "srv-ortho"],
-    bio: "Опыт 11 лет. Исправление прикуса любой сложности для взрослых и подростков. Сертифицированный эксперт по элайнерам Spark и Invisalign.",
-    rating: 4.9
+    bio: "Опыт 11 лет. Исправление прикуса и создание идеальной улыбки для взрослых и подростков. Сертифицированный эксперт по элайнерам Spark и самолигирующим брекетам Damon.",
+    rating: 4.9,
+    focusAreas: [
+      "Прозрачные невидимые элайнеры Spark и Invisalign",
+      "Самолигирующие эстетичные брекеты Damon Clear",
+      "Исправление скученности без удаления здоровых зубов",
+      "Подготовка окклюзии к тотальному протезированию"
+    ],
+    portfolio: [
+      {
+        id: "case-4-1",
+        title: "Исправление выраженной скученности элайнерами Spark",
+        category: "Ортодонтия",
+        description: "Пациентка 24 года. Жалобы на неровные зубы верхнего и нижнего ряда. Лечение на прозрачных каппах без брекетов за 12 месяцев. Идеальная арка и прикус.",
+        beforeImage: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-daab30f310ce?w=700&h=450&fit=crop",
+        durationText: "Курс 12 месяцев",
+        tags: ["Элайнеры Spark", "Без брекетов", "Ровные зубы"]
+      },
+      {
+        id: "case-4-2",
+        title: "Коррекция глубокого прикуса на системе Damon Clear",
+        category: "Ортодонтия",
+        description: "Дистальный прикус со стираемостью передних зубов. Керамические брекеты Damon. Достигнуто гармоничное смыкание зубов и эстетический профиль улыбки.",
+        beforeImage: "https://images.unsplash.com/photo-1598256989800-fe5f95da9787?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=700&h=450&fit=crop",
+        durationText: "Курс 15 месяцев",
+        tags: ["Брекеты Damon", "Прикус", "Эстетика"]
+      }
+    ]
   },
   {
     id: "doc-5",
     name: "Dr. Данияр Оспанов",
     specialty: "Детский стоматолог, врач высшей категории",
-    avatar: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=200&h=200&fit=crop&crop=face",
-    workDays: [1, 2, 4, 5, 7], // Пн, Вт, Чт, Пт, Вс
+    avatar: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=400&h=400&fit=crop&crop=face",
+    experienceYears: 8,
+    workDays: [1, 2, 4, 5, 7], // Пн, Вт, Чт, Пт, Вс (Среда, Суббота выходной)
     workHours: { start: "09:00", end: "17:00" },
     breakHours: { start: "13:00", end: "14:00" },
     slotInterval: 30,
     serviceIds: ["srv-consult", "srv-pediatric", "srv-caries"],
-    bio: "Опыт 8 лет. Любимый доктор маленьких пациентов! Лечение без слез, адаптация тревожных деток, мультфильмы во время приема.",
-    rating: 5.0
+    bio: "Опыт 8 лет. Любимый доктор маленьких пациентов клиники DentaCare! Лечение без боли и страха, бережная адаптация тревожных деток, мультфильмы во время приема.",
+    rating: 5.0,
+    focusAreas: [
+      "Адаптационный прием детей без уколов и страха",
+      "Лечение кариеса и пульпита молочных зубов",
+      "Цветные детские пломбы Twinky Star",
+      "Герметизация фиссур постоянных моляров"
+    ],
+    portfolio: [
+      {
+        id: "case-5-1",
+        title: "Адаптационное лечение кариеса у ребенка 5 лет",
+        category: "Детская стоматология",
+        description: "Ребенок с дентофобией после неудачного опыта в другой клинике. Игра-адаптация, просмотр мультфильма и бережное лечение двух зубов цветными био-пломбами без слез.",
+        beforeImage: "https://images.unsplash.com/photo-1606811841689-23dfddce3e95?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=700&h=450&fit=crop",
+        durationText: "1 визит • 35 минут",
+        tags: ["Без боли", "Мультфильмы", "Подарок храбрецу"]
+      },
+      {
+        id: "case-5-2",
+        title: "Профилактическая герметизация фиссур",
+        category: "Детская профилактика",
+        description: "Запечатывание глубоких фиссур первых постоянных моляров у 7-летнего ребенка и укрепление эмали фторлаком. 100% профилактика кариеса на 4 года.",
+        beforeImage: "https://images.unsplash.com/photo-1598256989800-fe5f95da9787?w=700&h=450&fit=crop",
+        afterImage: "https://images.unsplash.com/photo-1609840114035-3c981b782dfe?w=700&h=450&fit=crop",
+        durationText: "1 визит • 30 минут",
+        tags: ["Герметизация", "Профилактика", "Защита"]
+      }
+    ]
   }
 ];
 

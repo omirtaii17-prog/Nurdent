@@ -9,11 +9,23 @@ export interface Service {
   active: boolean;
 }
 
+export interface DoctorCase {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  beforeImage: string;
+  afterImage: string;
+  durationText?: string;
+  tags?: string[];
+}
+
 export interface Doctor {
   id: string;
   name: string;
   specialty: string;
   avatar: string;
+  experienceYears: number;
   workDays: number[]; // 1 = Mon, 2 = Tue, 3 = Wed, 4 = Thu, 5 = Fri, 6 = Sat, 7 = Sun
   workHours: {
     start: string; // "09:00"
@@ -27,6 +39,8 @@ export interface Doctor {
   serviceIds: string[];
   bio: string;
   rating?: number;
+  focusAreas?: string[];
+  portfolio?: DoctorCase[];
 }
 
 export interface Appointment {
@@ -70,6 +84,15 @@ export interface SlotInfo {
   serviceName?: string;
 }
 
+export interface ChatAction {
+  id?: string;
+  label: string;
+  type: 'navigate_doctors' | 'navigate_services' | 'navigate_portfolio' | 'open_booking' | 'open_2gis' | 'call_admin' | 'whatsapp_admin' | 'voice_call' | 'navigate_faq';
+  doctorId?: string;
+  serviceId?: string;
+  payload?: any;
+}
+
 export interface ChatMessage {
   id: string;
   sender: 'user' | 'assistant' | 'system';
@@ -79,8 +102,11 @@ export interface ChatMessage {
   isConfirmedCard?: boolean;
   confirmedAppointmentId?: string;
   suggestedSlots?: SlotInfo[];
+  recommendedDoctors?: Doctor[];
+  actions?: ChatAction[];
   quickReplies?: string[];
   isEmergencyAlert?: boolean;
+  needsHandoff?: boolean;
 }
 
 export interface ClinicInfo {
@@ -96,6 +122,7 @@ export interface ClinicInfo {
   workingHoursWeekend: string;
   installments: string[];
   emergencyPolicy: string;
+  gisUrl?: string;
 }
 
 export interface FaqItem {
