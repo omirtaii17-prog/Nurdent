@@ -1,0 +1,6 @@
+{
+  "name": "Dental AI Receptionist",
+  "description": "Интеллектуальный AI-администратор стоматологической клиники для записи пациентов, консультации по услугам, проверки расписания врачей и напоминаний.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
